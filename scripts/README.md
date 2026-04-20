@@ -53,10 +53,37 @@ powershell -ExecutionPolicy Bypass -File .\Quick-Triage.ps1 -Clipboard
 
 ### Privacy
 
-- No data is sent anywhere except the two public IP lookup calls (ipinfo.io)
-  and the endpoint probes themselves.
-- The saved log redacts your public IP to its first two octets.
-- Source code is in this repo, review before running if you prefer.
+The log is designed to be safe to paste in a public Discord channel. It
+contains only the minimum needed for someone to help diagnose your issue.
+
+**What's in the log:**
+
+- Your public IP, redacted to the first two octets (e.g. `147.253.xxx.xxx`)
+- Your network's AS number (e.g. `AS30165`), without the provider name
+- Your country code (e.g. `US`), no city or region
+- DNS resolutions for the Windrose endpoints
+- TCP and UDP test results
+- The verdict and any recommended next steps
+
+**What's NOT in the log:**
+
+- Your full public IP
+- Your ISP/provider name
+- Your city, region, or any location finer than country
+- Your computer name, username, or file paths
+- MAC addresses, hardware info, or installed software
+- Any information from your local network
+
+If your ISP is on the [known-culprit list](https://github.com/1r0nch3f/Windrose-Captain-Chest/blob/main/CHANGELOG.md#130---2026-04-19)
+(Spectrum, Xfinity, BT, Ziggo, etc.), the log will name that ISP in a
+warning line, because knowing which one is on the list is the whole point
+of that check. Otherwise, no ISP name appears anywhere.
+
+No data is sent anywhere except the two calls needed for the checks
+themselves (ipinfo.io for your public IP and the endpoint probes).
+
+If you want even more control, the source is in this repo, review before
+running.
 
 ### See also
 
