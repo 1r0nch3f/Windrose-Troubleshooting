@@ -352,48 +352,98 @@ Write-Line "  Verdict"                                                 'Head'
 Write-Line "========================================================" 'Head'
 
 $verdict = ''
-$advice  = @()
+$verdictKey = ''   # Used to select the 'What to try' steps
+$steps   = @()
 
 if ($ispFlag -and ($udpFailures -gt 0 -or $tcpFailures -gt 0)) {
-    $verdict = 'Likely ISP block'
-    $advice += "Your ISP ($ispMatch) is on the known-culprit list and gateway ports are failing."
-    $advice += 'Turn off any ISP security feature (Spectrum Security Shield, Advanced WiFi Security, etc.) in your account portal.'
-    $advice += 'If toggling ISP security does not help, try a VPN that forwards UDP (Mullvad, AirVPN, PIA) as a workaround.'
+    $verdict    = 'Likely ISP block'
+    $verdictKey = 'IspBlock'
 } elseif ($udpFailures -gt 0 -and $tcpFailures -eq 0) {
-    $verdict = 'Likely UDP/3478 block (ISP or router)'
-    $advice += 'TCP works but UDP to the gateway is failing. This is the classic Windrose-blocking pattern.'
-    $advice += 'Check your router firewall or any security suite, or try a VPN that forwards UDP.'
+    $verdict    = 'Likely UDP/3478 block (ISP or router)'
+    $verdictKey = 'UdpBlock'
 } elseif ($tcpFailures -gt 0 -and $dnsFailures -eq 0) {
-    $verdict = 'Likely local firewall or router'
-    $advice += 'DNS resolves but TCP connects fail. A local firewall, router filter, or security suite is likely blocking outbound traffic.'
-    $advice += 'Try temporarily disabling third-party firewalls/AV and re-running.'
+    $verdict    = 'Likely local firewall or router'
+    $verdictKey = 'LocalFirewall'
 } elseif ($dnsFailures -gt 0) {
-    $verdict = 'Likely DNS or basic connectivity issue'
-    $advice += 'DNS lookups are failing. Try switching DNS to 1.1.1.1 or 8.8.8.8 and re-run.'
-    $advice += 'If DNS fails for all four endpoints, your ISP may be blocking windrose.support entirely at the DNS level.'
+    $verdict    = 'Likely DNS or basic connectivity issue'
+    $verdictKey = 'DnsIssue'
 } elseif ($tcpFailures -eq 0 -and $udpFailures -eq 0 -and $ispFlag) {
-    $verdict = 'All checks passed, but ISP is a known culprit'
-    $advice += "Connections are working right now, but your ISP ($ispMatch) is on the known-culprit list."
-    $advice += 'If the game breaks again later, check whether ISP security (Spectrum Security Shield, etc.) was re-enabled.'
-    $advice += 'If the game is still misbehaving, the issue is likely server-side (Windrose load) or client-side (see Captain''s Chest for deeper diagnostics).'
+    $verdict    = 'All checks passed, but ISP is a known culprit'
+    $verdictKey = 'IspOkButCulprit'
 } elseif ($tcpFailures -eq 0 -and $udpFailures -eq 0) {
-    $verdict = 'No network issue detected'
-    $advice += 'All checks passed. If the game still will not connect, it is likely server-side (200k+ player load).'
-    $advice += 'You can also try hosting with Direct IP on port 7777 as a workaround.'
+    $verdict    = 'No network issue detected'
+    $verdictKey = 'AllOk'
 } else {
-    $verdict = 'Mixed results, see details above'
-    $advice += 'Some checks failed in ways that do not match a single known pattern.'
-    $advice += 'Run the full Captain''s Chest toolkit for deeper diagnostics.'
+    $verdict    = 'Mixed results, see details above'
+    $verdictKey = 'Mixed'
+}
+
+# Build the 'What to try' steps based on the verdict.
+# Keep steps generic (no ISP-specific toggle paths), in "try first, try next, last resort" order.
+switch ($verdictKey) {
+    'IspBlock' {
+        $steps += 'Your ISP is on the known-culprit list and gateway ports are failing. The fix is almost always an ISP-provided security feature that is on by default.'
+        $steps += 'Open your ISP''s account app or website and look for a setting called "Security Shield", "Advanced Security", "Network Protection", or similar. Turn it off.'
+        $steps += 'Restart your router, then re-run this script. UDP/3478 should now show OK.'
+        $steps += 'If the ISP toggle does not exist or does not help, try a VPN that forwards UDP (Mullvad, AirVPN, PIA) to confirm the block is on the ISP side.'
+        $steps += 'Still stuck? Run the full Captain''s Chest toolkit for ISP-specific toggle paths: https://github.com/1r0nch3f/Windrose-Captain-Chest'
+    }
+    'UdpBlock' {
+        $steps += 'TCP works but UDP to the gateway is failing. This is the classic Windrose-blocking pattern.'
+        $steps += 'First, check your ISP''s account app or website for a "Security Shield" / "Advanced Security" / "Network Protection" feature. Turn it off.'
+        $steps += 'Next, check your router admin page for firewall or parental-control features. Some routers block UDP traffic on non-standard ports by default.'
+        $steps += 'Then check any third-party antivirus or firewall on your PC (Norton, McAfee, Kaspersky, ESET). Disable temporarily to test.'
+        $steps += 'If none of the above works, a VPN that forwards UDP (Mullvad, AirVPN, PIA) will bypass the block entirely.'
+    }
+    'LocalFirewall' {
+        $steps += 'DNS resolves but TCP connects are failing. Something between your PC and the wider internet is blocking outbound traffic.'
+        $steps += 'Temporarily disable any third-party antivirus or firewall on your PC (Norton, McAfee, Kaspersky, ESET, Malwarebytes). Re-run.'
+        $steps += 'Check Windows Defender Firewall allows outbound on 443/tcp. Press Win, type "Windows Defender Firewall", check Advanced settings > Outbound Rules.'
+        $steps += 'Check your router for any outbound blocking or parental-control rules targeting your device.'
+        $steps += 'Try from a different network (mobile hotspot is a quick test) to confirm whether it is your machine or your network.'
+    }
+    'DnsIssue' {
+        $steps += 'DNS lookups are failing, which means your machine cannot translate the Windrose hostnames into IP addresses.'
+        $steps += 'Switch your DNS to a public resolver: 1.1.1.1 (Cloudflare) or 8.8.8.8 (Google). Network settings > change adapter options > right-click your adapter > Properties > IPv4 > Use the following DNS servers.'
+        $steps += 'After changing DNS, flush the local DNS cache: open an admin PowerShell and run ipconfig /flushdns.'
+        $steps += 'Re-run this script. DNS entries should now show OK.'
+        $steps += 'If DNS still fails after switching, your ISP may be blocking windrose.support at the DNS level, and a VPN will likely be needed.'
+    }
+    'IspOkButCulprit' {
+        $steps += 'All checks passed, so your connection to Windrose is working right now. But your ISP is on the known-culprit list for blocking this game.'
+        $steps += 'If the game breaks again later (especially after a router reboot or ISP app update), the ISP security toggle may have re-enabled itself. Check it again if that happens.'
+        $steps += 'If the game is currently misbehaving, the cause is likely server-side (Windrose capacity) or client-side (crash, missing runtimes, driver).'
+        $steps += 'For client-side issues, run the full Captain''s Chest toolkit: https://github.com/1r0nch3f/Windrose-Captain-Chest'
+    }
+    'AllOk' {
+        $steps += 'All network checks passed. Your connection to Windrose is working.'
+        $steps += 'If the game still will not connect, the cause is on Windrose''s side (server capacity during peak hours) or on your machine (crash, missing runtimes, driver, corrupted install).'
+        $steps += 'For peak-hour issues, try again later, or host with Direct IP mode (port 7777) to bypass the backend entirely.'
+        $steps += 'For client-side issues, run the full Captain''s Chest toolkit: https://github.com/1r0nch3f/Windrose-Captain-Chest'
+    }
+    'Mixed' {
+        $steps += 'Some checks failed in ways that do not match a single known pattern. The combined signal is unclear.'
+        $steps += 'Run the full Captain''s Chest toolkit for deeper diagnostics: https://github.com/1r0nch3f/Windrose-Captain-Chest'
+        $steps += 'When asking for help, paste both this log and the Captain''s Chest output so helpers can see the full picture.'
+    }
 }
 
 Write-Line ''
-$vcolor = if ($verdict -match 'No network') { 'Good' } elseif ($verdict -match 'Likely|culprit') { 'Warn' } else { 'Bad' }
+$vcolor = if ($verdictKey -eq 'AllOk') { 'Good' } elseif ($verdictKey -in @('IspOkButCulprit','IspBlock','UdpBlock','LocalFirewall','DnsIssue')) { 'Warn' } else { 'Bad' }
 Write-Line "  $verdict" $vcolor
 Write-Line ''
-foreach ($a in $advice) {
-    Write-Line "    - $a" 'Info'
-}
+
+Write-Line "========================================================" 'Head'
+Write-Line "  What to try"                                             'Head'
+Write-Line "========================================================" 'Head'
 Write-Line ''
+$stepNum = 1
+foreach ($s in $steps) {
+    Write-Line "  $stepNum. $s" 'Info'
+    Write-Line ''
+    $stepNum++
+}
+
 Write-Line "========================================================" 'Head'
 Write-Line "  Next steps"                                              'Head'
 Write-Line "========================================================" 'Head'
