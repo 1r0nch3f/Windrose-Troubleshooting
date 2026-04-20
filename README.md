@@ -16,6 +16,7 @@ Pick the statement that best matches your situation:
 | My dedicated server crashes when someone tries to join | [Dedicated server crashes on join](docs/scenarios/dedicated-server-crash.md) |
 | Connection works, then drops after a while | [Connection drops mid-session](docs/scenarios/connection-drops.md) |
 | I see a specific error message | [Error signature catalog](docs/errors/README.md) |
+| I want an automated quick check of my connection | [Run Quick-Triage](scripts/) |
 | Not sure | [Full diagnostic flowchart](docs/diagnostic-flowchart.md) |
 
 ## Before asking for help
@@ -34,6 +35,7 @@ The single most useful thing you can attach is your log file. The [log gathering
 - [`docs/known-issues.md`](docs/known-issues.md), living list of reproducible bugs and workarounds
 - [`docs/support-request-template.md`](docs/support-request-template.md), what to include when asking for help
 - [`docs/glossary.md`](docs/glossary.md), networking and game-specific terms
+- [`scripts/`](scripts/), standalone diagnostic scripts you can run directly from PowerShell
 
 ## Contributing
 
