@@ -252,21 +252,23 @@ try {
     $resp = Invoke-RestMethod -Uri 'https://ipinfo.io/json' -TimeoutSec 5 -ErrorAction Stop
     $publicIp = $resp.ip
     $ispName  = $resp.org
+    # Extract the AS number if the org string is in the form "AS12345 Provider Name"
+    $asNumber = if ($ispName -match '^(AS\d+)\b') { $matches[1] } else { '(no AS)' }
     Write-Line "    Public IP : $(Protect-IpAddress $publicIp)"  'Info'
-    Write-Line "    ISP       : $ispName"                         'Info'
-    Write-Line "    Location  : $($resp.city), $($resp.region), $($resp.country)" 'Info'
+    Write-Line "    Network   : $asNumber"                       'Info'
+    Write-Line "    Country   : $($resp.country)"                'Info'
 
     foreach ($c in $CulpritIsps) {
         if ($ispName -match $c.Pattern) {
             $ispFlag  = $true
             $ispMatch = $c.Name
             $tag      = if ($c.Confirmed) { 'confirmed to block Windrose' } else { 'known to block similar P2P games' }
-            Write-Line "    WARN      : ISP is on the known-culprit list ($($c.Name), $tag)." 'Warn'
+            Write-Line "    WARN      : ISP matched known culprit: $($c.Name) ($tag)." 'Warn'
             break
         }
     }
     if (-not $ispFlag) {
-        Write-Line "    OK        : ISP is not on the known-culprit list." 'Good'
+        Write-Line "    OK        : ISP not on the known-culprit list." 'Good'
     }
 } catch {
     Write-Line "    ERROR     : Could not reach ipinfo.io. Check basic internet." 'Bad'
