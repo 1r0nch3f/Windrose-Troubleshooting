@@ -31,18 +31,12 @@ $ProgressPreference    = 'SilentlyContinue'
 
 # --- Config -----------------------------------------------------------------
 
-$Version = '1.0.0'
+$Version = '1.1.0'
 
 # ISPs known to cause partial-outage symptoms with Windrose (router security
 # features blocking UDP/3478, etc.). Patterns are regex alternations matched
 # case-insensitively against the ipinfo.io "org" field.
-#
-# Kept in sync with the Captain's Chest culprit table. Entries marked
-# "confirmed" have public reports of blocking Windrose specifically.
-# Other entries are "known to block similar P2P games" (Palworld, Rust, Ark,
-# etc.) using the same security features.
 $CulpritIsps = @(
-    # --- United States ---
     [pscustomobject]@{ Pattern = 'Spectrum|Charter';      Name = 'Spectrum (Charter)';     Confirmed = $true  }
     [pscustomobject]@{ Pattern = 'Comcast|Xfinity';       Name = 'Xfinity (Comcast)';      Confirmed = $true  }
     [pscustomobject]@{ Pattern = 'Cox Communications';    Name = 'Cox';                    Confirmed = $false }
@@ -53,13 +47,11 @@ $CulpritIsps = @(
     [pscustomobject]@{ Pattern = 'Optimum|Cablevision';   Name = 'Optimum (Altice)';       Confirmed = $false }
     [pscustomobject]@{ Pattern = 'Frontier';              Name = 'Frontier';               Confirmed = $false }
 
-    # --- United Kingdom ---
     [pscustomobject]@{ Pattern = 'British Telecom|BT ';   Name = 'BT';                     Confirmed = $true  }
     [pscustomobject]@{ Pattern = 'Sky UK|Sky Broadband';  Name = 'Sky';                    Confirmed = $false }
     [pscustomobject]@{ Pattern = 'Virgin Media';          Name = 'Virgin Media';           Confirmed = $false }
     [pscustomobject]@{ Pattern = 'TalkTalk';              Name = 'TalkTalk';               Confirmed = $false }
 
-    # --- Europe ---
     [pscustomobject]@{ Pattern = 'Ziggo|VodafoneZiggo';   Name = 'Ziggo (NL)';             Confirmed = $true  }
     [pscustomobject]@{ Pattern = 'Orange ';               Name = 'Orange (FR/ES)';         Confirmed = $false }
     [pscustomobject]@{ Pattern = 'Free SAS|Free ';        Name = 'Free (FR)';              Confirmed = $false }
@@ -67,44 +59,33 @@ $CulpritIsps = @(
     [pscustomobject]@{ Pattern = 'Telekom';               Name = 'Telekom (DE/EU)';        Confirmed = $false }
     [pscustomobject]@{ Pattern = 'Vodafone';              Name = 'Vodafone (EU)';          Confirmed = $false }
 
-    # --- Canada ---
     [pscustomobject]@{ Pattern = 'Rogers Communications'; Name = 'Rogers (CA)';            Confirmed = $false }
     [pscustomobject]@{ Pattern = 'Bell Canada';           Name = 'Bell (CA)';              Confirmed = $false }
     [pscustomobject]@{ Pattern = 'Telus';                 Name = 'Telus (CA)';             Confirmed = $false }
 
-    # --- Australia ---
     [pscustomobject]@{ Pattern = 'Telstra';               Name = 'Telstra (AU)';           Confirmed = $false }
     [pscustomobject]@{ Pattern = 'Optus';                 Name = 'Optus (AU)';             Confirmed = $false }
 )
 
-# Endpoints to probe. Keep this list small, this is the QUICK triage.
-# Matches Captain's Chest Fleet check endpoints.
+# Quick endpoint list for DNS/TCP checks.
 $Endpoints = @(
-    [pscustomobject]@{
-        Name     = 'EU/NA API Gateway'
-        HostName = 'r5coopapigateway-eu-release.windrose.support'
-        TcpPort  = 443
-        UdpPort  = $null
-    }
-    [pscustomobject]@{
-        Name     = 'CIS API Gateway'
-        HostName = 'r5coopapigateway-ru-release.windrose.support'
-        TcpPort  = 443
-        UdpPort  = $null
-    }
-    [pscustomobject]@{
-        Name     = 'KR/SEA API Gateway'
-        HostName = 'r5coopapigateway-kr-release.windrose.support'
-        TcpPort  = 443
-        UdpPort  = $null
-    }
-    [pscustomobject]@{
-        Name     = 'STUN/TURN (P2P signaling)'
-        HostName = 'windrose.support'
-        TcpPort  = $null
-        UdpPort  = 3478
-    }
+    [pscustomobject]@{ Name = 'EU/NA API Gateway'; HostName = 'r5coopapigateway-eu-release.windrose.support'; TcpPort = 443; UdpPort = $null }
+    [pscustomobject]@{ Name = 'CIS API Gateway';   HostName = 'r5coopapigateway-ru-release.windrose.support'; TcpPort = 443; UdpPort = $null }
+    [pscustomobject]@{ Name = 'KR/SEA API Gateway';HostName = 'r5coopapigateway-kr-release.windrose.support'; TcpPort = 443; UdpPort = $null }
 )
+
+# CHANGED: public comparison STUN endpoints are checked before drawing UDP conclusions.
+$PublicStunServers = @(
+    [pscustomobject]@{ Name = 'Google STUN 1'; HostName = 'stun.l.google.com';  Port = 19302 }
+    [pscustomobject]@{ Name = 'Google STUN 2'; HostName = 'stun1.l.google.com'; Port = 19302 }
+    [pscustomobject]@{ Name = 'Cloudflare STUN'; HostName = 'stun.cloudflare.com'; Port = 3478 }
+)
+
+$WindroseUdpEndpoint = [pscustomobject]@{
+    Name = 'Windrose STUN/TURN (probe target)'
+    HostName = 'windrose.support'
+    Port = 3478
+}
 
 # --- Helpers ----------------------------------------------------------------
 
@@ -131,72 +112,114 @@ function Write-Line {
 function Protect-IpAddress {
     param([string]$IpAddress)
     if ([string]::IsNullOrWhiteSpace($IpAddress)) { return '(unknown)' }
-    # Keep first two octets for IPv4, redact the rest.
     if ($IpAddress -match '^(\d{1,3}\.\d{1,3})\.\d{1,3}\.\d{1,3}$') {
         return "$($matches[1]).xxx.xxx"
     }
     return '(redacted)'
 }
 
-function Test-StunUdp {
-    <#
-    Real UDP/3478 test using a STUN binding request. If the server replies,
-    UDP is reachable. If it times out, UDP is blocked (typical Spectrum
-    Security Shield behavior).
+function New-StunBindingRequest {
+    $txid = New-Object byte[] 12
+    (New-Object System.Random).NextBytes($txid)
 
-    This is the only way to accurately detect the UDP block. A fire-and-forget
-    Send() will always "succeed" locally regardless of whether the packet ever
-    leaves the network.
+    $msg = New-Object byte[] 20
+    $msg[0] = 0x00; $msg[1] = 0x01
+    $msg[2] = 0x00; $msg[3] = 0x00
+    $msg[4] = 0x21; $msg[5] = 0x12; $msg[6] = 0xA4; $msg[7] = 0x42
+    [Array]::Copy($txid, 0, $msg, 8, 12)
+
+    return [pscustomobject]@{ Bytes = $msg; TransactionId = $txid }
+}
+
+function Test-StunReply {
+    param(
+        [byte[]]$Response,
+        [byte[]]$ExpectedTransactionId
+    )
+
+    if (-not $Response -or $Response.Length -lt 20) { return $false }
+
+    # Conservative validation:
+    # - STUN response class bits (message type high bits) should be 0x010x for success,
+    #   or 0x011x for error response.
+    # - Magic cookie must match RFC5389.
+    # - Transaction ID should match request.
+    $messageType = [int]$Response[0] -shl 8 -bor [int]$Response[1]
+    $isResponseType = (($messageType -band 0x0110) -eq 0x0100)
+    if (-not $isResponseType) { return $false }
+
+    $cookieOk = ($Response[4] -eq 0x21 -and $Response[5] -eq 0x12 -and $Response[6] -eq 0xA4 -and $Response[7] -eq 0x42)
+    if (-not $cookieOk) { return $false }
+
+    for ($i = 0; $i -lt 12; $i++) {
+        if ($Response[8 + $i] -ne $ExpectedTransactionId[$i]) { return $false }
+    }
+
+    return $true
+}
+
+function Invoke-StunProbe {
+    <#
+    CHANGED:
+    - Returns a rich object (not just true/false) for safer verdict logic.
+    - "No reply" is treated as endpoint-specific unless corroborated by public STUN failures.
     #>
     param(
         [string]$HostName,
-        [int]$Port      = 3478,
+        [int]$Port,
         [int]$TimeoutMs = 3000
     )
+
+    $result = [ordered]@{
+        HostName = $HostName
+        Port = $Port
+        DnsResolved = $false
+        TargetIp = $null
+        ProbeSent = $false
+        UdpReplyReceived = $false
+        ValidStunReply = $false
+        Error = $null
+    }
+
     $udp = $null
     try {
-        # Resolve to IP first so we can differentiate DNS vs UDP failures.
         $addr = [System.Net.Dns]::GetHostAddresses($HostName) |
                 Where-Object { $_.AddressFamily -eq 'InterNetwork' } |
                 Select-Object -First 1
-        if (-not $addr) { return $false }
+        if (-not $addr) {
+            $result.Error = 'No IPv4 address resolved.'
+            return [pscustomobject]$result
+        }
+
+        $result.DnsResolved = $true
+        $result.TargetIp = $addr.IPAddressToString
+
+        $request = New-StunBindingRequest
 
         $udp = New-Object System.Net.Sockets.UdpClient
         $udp.Client.ReceiveTimeout = $TimeoutMs
-        $udp.Client.SendTimeout    = $TimeoutMs
-
-        # Build a minimal STUN Binding Request (RFC 5389):
-        #   0x0001      = Binding Request
-        #   0x0000      = Message Length (no attributes)
-        #   0x2112A442  = Magic Cookie
-        #   12 bytes    = random transaction ID
-        $txid = New-Object byte[] 12
-        (New-Object System.Random).NextBytes($txid)
-
-        $msg = New-Object byte[] 20
-        $msg[0]  = 0x00; $msg[1]  = 0x01  # Binding Request
-        $msg[2]  = 0x00; $msg[3]  = 0x00  # Length
-        $msg[4]  = 0x21; $msg[5]  = 0x12  # Magic Cookie
-        $msg[6]  = 0xA4; $msg[7]  = 0x42
-        [Array]::Copy($txid, 0, $msg, 8, 12)
+        $udp.Client.SendTimeout = $TimeoutMs
 
         $endpoint = New-Object System.Net.IPEndPoint($addr, $Port)
-        [void]$udp.Send($msg, $msg.Length, $endpoint)
+        [void]$udp.Send($request.Bytes, $request.Bytes.Length, $endpoint)
+        $result.ProbeSent = $true
 
-        # Wait for response (valid STUN reply = UDP reachable)
         $remote = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
         $ar = $udp.BeginReceive($null, $null)
         $ok = $ar.AsyncWaitHandle.WaitOne($TimeoutMs, $false)
+
         if ($ok) {
-            $null = $udp.EndReceive($ar, [ref]$remote)
-            return $true
+            $payload = $udp.EndReceive($ar, [ref]$remote)
+            $result.UdpReplyReceived = $true
+            $result.ValidStunReply = Test-StunReply -Response $payload -ExpectedTransactionId $request.TransactionId
         }
-        return $false
     } catch {
-        return $false
+        $result.Error = $_.Exception.Message
     } finally {
         if ($udp) { $udp.Close() }
     }
+
+    return [pscustomobject]$result
 }
 
 function Test-TcpPort {
@@ -208,7 +231,7 @@ function Test-TcpPort {
     try {
         $tcp = New-Object System.Net.Sockets.TcpClient
         $iar = $tcp.BeginConnect($HostName, $Port, $null, $null)
-        $ok  = $iar.AsyncWaitHandle.WaitOne($TimeoutMs, $false)
+        $ok = $iar.AsyncWaitHandle.WaitOne($TimeoutMs, $false)
         if ($ok -and $tcp.Connected) {
             $tcp.EndConnect($iar)
             $tcp.Close()
@@ -236,33 +259,32 @@ function Get-PingLatency {
 
 Clear-Host
 Write-Line "========================================================" 'Head'
-Write-Line "  Windrose Quick Triage v$Version"                         'Head'
-Write-Line "  $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"                'Dim'
+Write-Line "  Windrose Quick Triage v$Version" 'Head'
+Write-Line "  $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" 'Dim'
 Write-Line "========================================================" 'Head'
 Write-Line ''
 
 # --- 1. Public IP and ISP ---------------------------------------------------
 
-Write-Line "[1/5] Detecting public IP and ISP..." 'Head'
-$ispName  = $null
-$ispFlag  = $false
+Write-Line "[1/6] Detecting public IP and ISP..." 'Head'
+$ispName = $null
+$ispFlag = $false
 $ispMatch = $null
 $publicIp = $null
 try {
     $resp = Invoke-RestMethod -Uri 'https://ipinfo.io/json' -TimeoutSec 5 -ErrorAction Stop
     $publicIp = $resp.ip
-    $ispName  = $resp.org
-    # Extract the AS number if the org string is in the form "AS12345 Provider Name"
+    $ispName = $resp.org
     $asNumber = if ($ispName -match '^(AS\d+)\b') { $matches[1] } else { '(no AS)' }
-    Write-Line "    Public IP : $(Protect-IpAddress $publicIp)"  'Info'
-    Write-Line "    Network   : $asNumber"                       'Info'
-    Write-Line "    Country   : $($resp.country)"                'Info'
+    Write-Line "    Public IP : $(Protect-IpAddress $publicIp)" 'Info'
+    Write-Line "    Network   : $asNumber" 'Info'
+    Write-Line "    Country   : $($resp.country)" 'Info'
 
     foreach ($c in $CulpritIsps) {
         if ($ispName -match $c.Pattern) {
-            $ispFlag  = $true
+            $ispFlag = $true
             $ispMatch = $c.Name
-            $tag      = if ($c.Confirmed) { 'confirmed to block Windrose' } else { 'known to block similar P2P games' }
+            $tag = if ($c.Confirmed) { 'confirmed to block Windrose' } else { 'known to block similar P2P games' }
             Write-Line "    WARN      : ISP matched known culprit: $($c.Name) ($tag)." 'Warn'
             break
         }
@@ -277,9 +299,9 @@ Write-Line ''
 
 # --- 2. DNS resolution ------------------------------------------------------
 
-Write-Line "[2/5] Resolving Windrose endpoints..." 'Head'
+Write-Line "[2/6] Resolving Windrose endpoints..." 'Head'
 $dnsFailures = 0
-foreach ($ep in $Endpoints) {
+foreach ($ep in ($Endpoints + @([pscustomobject]@{ HostName = $WindroseUdpEndpoint.HostName; Name = $WindroseUdpEndpoint.Name }))) {
     try {
         $r = Resolve-DnsName -Name $ep.HostName -Type A -ErrorAction Stop |
              Where-Object { $_.IPAddress } |
@@ -299,9 +321,9 @@ Write-Line ''
 
 # --- 3. TCP connect tests ---------------------------------------------------
 
-Write-Line "[3/5] Testing TCP connectivity..." 'Head'
+Write-Line "[3/6] Testing TCP connectivity..." 'Head'
 $tcpFailures = 0
-$tcpTargets  = $Endpoints | Where-Object { $_.TcpPort }
+$tcpTargets = $Endpoints | Where-Object { $_.TcpPort }
 foreach ($ep in $tcpTargets) {
     $ok = Test-TcpPort -HostName $ep.HostName -Port $ep.TcpPort -TimeoutMs 3000
     if ($ok) {
@@ -311,130 +333,159 @@ foreach ($ep in $tcpTargets) {
         Write-Line ("    FAIL : {0,-28} {1}/tcp" -f $ep.Name, $ep.TcpPort) 'Bad'
     }
 }
+$tcpPassed = ($tcpFailures -eq 0)
 Write-Line ''
 
-# --- 4. UDP 3478 probe (real STUN binding request) --------------------------
+# --- 4. Public STUN comparison ----------------------------------------------
 
-Write-Line "[4/5] Probing UDP/3478 with STUN (the port commonly blocked)..." 'Head'
-$udpFailures = 0
-$udpTargets  = $Endpoints | Where-Object { $_.UdpPort }
-foreach ($ep in $udpTargets) {
-    $ok = Test-StunUdp -HostName $ep.HostName -Port $ep.UdpPort -TimeoutMs 3000
-    if ($ok) {
-        Write-Line ("    OK   : {0,-28} {1}/udp (STUN reply received)" -f $ep.Name, $ep.UdpPort) 'Good'
+Write-Line "[4/6] Comparing UDP/STUN with public test servers..." 'Head'
+$publicStunResults = @()
+foreach ($srv in $PublicStunServers) {
+    $probe = Invoke-StunProbe -HostName $srv.HostName -Port $srv.Port -TimeoutMs 3000
+    $publicStunResults += [pscustomobject]@{ Name = $srv.Name; HostName = $srv.HostName; Port = $srv.Port; Probe = $probe }
+
+    if ($probe.ValidStunReply) {
+        Write-Line ("    OK   : {0,-16} {1}:{2} (valid STUN reply)" -f $srv.Name, $srv.HostName, $srv.Port) 'Good'
+    } elseif ($probe.UdpReplyReceived) {
+        # Conservative: reply exists but parser unsure. Still evidence of UDP path activity.
+        Write-Line ("    WARN : {0,-16} {1}:{2} (UDP reply received; STUN parse inconclusive)" -f $srv.Name, $srv.HostName, $srv.Port) 'Warn'
+    } elseif (-not $probe.DnsResolved) {
+        Write-Line ("    FAIL : {0,-16} {1}:{2} (DNS failed)" -f $srv.Name, $srv.HostName, $srv.Port) 'Bad'
     } else {
-        $udpFailures++
-        Write-Line ("    FAIL : {0,-28} {1}/udp (no STUN reply, likely blocked)" -f $ep.Name, $ep.UdpPort) 'Bad'
+        Write-Line ("    FAIL : {0,-16} {1}:{2} (no UDP reply)" -f $srv.Name, $srv.HostName, $srv.Port) 'Bad'
     }
 }
+$publicStunAnyReply = ($publicStunResults | Where-Object { $_.Probe.UdpReplyReceived -or $_.Probe.ValidStunReply }).Count -gt 0
+$publicStunValidCount = ($publicStunResults | Where-Object { $_.Probe.ValidStunReply }).Count
 Write-Line ''
 
-# --- 5. Latency to nearest gateway ------------------------------------------
+# --- 5. Windrose UDP probe --------------------------------------------------
 
-Write-Line "[5/5] Measuring latency..." 'Head'
-$latency = $null
+Write-Line "[5/6] Probing Windrose UDP endpoint (non-authoritative probe)..." 'Head'
+$windroseUdpProbe = Invoke-StunProbe -HostName $WindroseUdpEndpoint.HostName -Port $WindroseUdpEndpoint.Port -TimeoutMs 3000
+
+if ($windroseUdpProbe.ValidStunReply) {
+    Write-Line ("    OK   : {0} {1}/udp (valid STUN reply)" -f $WindroseUdpEndpoint.HostName, $WindroseUdpEndpoint.Port) 'Good'
+} elseif ($windroseUdpProbe.UdpReplyReceived) {
+    Write-Line ("    WARN : {0} {1}/udp (UDP reply received; STUN parse inconclusive)" -f $WindroseUdpEndpoint.HostName, $WindroseUdpEndpoint.Port) 'Warn'
+} elseif (-not $windroseUdpProbe.DnsResolved) {
+    Write-Line ("    FAIL : {0} {1}/udp (DNS resolution failed)" -f $WindroseUdpEndpoint.HostName, $WindroseUdpEndpoint.Port) 'Bad'
+} else {
+    # CHANGED: no "likely blocked" claim from single endpoint no-reply.
+    Write-Line ("    WARN : {0} {1}/udp (no reply from tested endpoint)" -f $WindroseUdpEndpoint.HostName, $WindroseUdpEndpoint.Port) 'Warn'
+    Write-Line "           This does NOT by itself prove ISP/router UDP blocking." 'Dim'
+}
+$windroseUdpAnyReply = $windroseUdpProbe.UdpReplyReceived -or $windroseUdpProbe.ValidStunReply
+Write-Line ''
+
+# --- 6. Latency to nearest gateway ------------------------------------------
+
+Write-Line "[6/6] Measuring latency..." 'Head'
 $nearest = $Endpoints | Select-Object -First 1
 $latency = Get-PingLatency -HostName $nearest.HostName
 if ($null -ne $latency) {
-    $tag = if     ($latency -lt 80)  { 'Good' }
-           elseif ($latency -lt 200) { 'Warn' }
-           else                      { 'Bad'  }
+    $tag = if ($latency -lt 80) { 'Good' } elseif ($latency -lt 200) { 'Warn' } else { 'Bad' }
     Write-Line ("    {0,-28} ~ {1} ms" -f $nearest.Name, $latency) $tag
 } else {
     Write-Line "    Could not measure latency (ICMP may be filtered)." 'Warn'
 }
 Write-Line ''
 
+# --- Signal summary block ---------------------------------------------------
+
+Write-Line "========================================================" 'Head'
+Write-Line "  Signal summary" 'Head'
+Write-Line "========================================================" 'Head'
+Write-Line ("  TCP connectivity passed          : {0}" -f ($(if ($tcpPassed) { 'Yes' } else { 'No' }))) 'Info'
+Write-Line ("  Public STUN had UDP reply        : {0}" -f ($(if ($publicStunAnyReply) { 'Yes' } else { 'No' }))) 'Info'
+Write-Line ("  Public STUN valid-reply count    : {0}/{1}" -f $publicStunValidCount, $PublicStunServers.Count) 'Info'
+Write-Line ("  Windrose UDP endpoint replied    : {0}" -f ($(if ($windroseUdpAnyReply) { 'Yes' } else { 'No' }))) 'Info'
+Write-Line ''
+
 # --- Verdict ----------------------------------------------------------------
 
 Write-Line "========================================================" 'Head'
-Write-Line "  Verdict"                                                 'Head'
+Write-Line "  Verdict" 'Head'
 Write-Line "========================================================" 'Head'
 
 $verdict = ''
-$verdictKey = ''   # Used to select the 'What to try' steps
-$steps   = @()
+$verdictKey = ''
+$steps = @()
 
-if ($ispFlag -and ($udpFailures -gt 0 -or $tcpFailures -gt 0)) {
-    $verdict    = 'Likely ISP block'
-    $verdictKey = 'IspBlock'
-} elseif ($udpFailures -gt 0 -and $tcpFailures -eq 0) {
-    $verdict    = 'Likely UDP/3478 block (ISP or router)'
-    $verdictKey = 'UdpBlock'
-} elseif ($tcpFailures -gt 0 -and $dnsFailures -eq 0) {
-    $verdict    = 'Likely local firewall or router'
-    $verdictKey = 'LocalFirewall'
-} elseif ($dnsFailures -gt 0) {
-    $verdict    = 'Likely DNS or basic connectivity issue'
-    $verdictKey = 'DnsIssue'
-} elseif ($tcpFailures -eq 0 -and $udpFailures -eq 0 -and $ispFlag) {
-    $verdict    = 'All checks passed, but ISP is a known culprit'
+# CHANGED decision tree:
+# - Prioritize general TCP/connectivity failures first.
+# - Use public STUN comparison before suggesting broad UDP filtering.
+# - Treat Windrose no-reply as endpoint-specific unless public STUN also fails.
+if (-not $tcpPassed -and $dnsFailures -gt 0) {
+    $verdict = 'General connectivity issue (DNS + TCP failures)'
+    $verdictKey = 'GeneralConnectivity'
+} elseif (-not $tcpPassed) {
+    $verdict = 'General TCP/connectivity issue'
+    $verdictKey = 'TcpFailure'
+} elseif (-not $publicStunAnyReply) {
+    $verdict = 'Likely broader UDP path filtering/blocking'
+    $verdictKey = 'BroadUdpFailure'
+} elseif ($publicStunAnyReply -and -not $windroseUdpAnyReply) {
+    $verdict = 'Windrose UDP endpoint did not respond to this probe'
+    $verdictKey = 'WindroseEndpointNoReply'
+} elseif ($tcpPassed -and $publicStunAnyReply -and $windroseUdpAnyReply -and $ispFlag) {
+    $verdict = 'Checks passed (ISP still on known-culprit list)'
     $verdictKey = 'IspOkButCulprit'
-} elseif ($tcpFailures -eq 0 -and $udpFailures -eq 0) {
-    $verdict    = 'No network issue detected'
+} elseif ($tcpPassed -and $publicStunAnyReply) {
+    $verdict = 'No broad network issue detected by quick triage'
     $verdictKey = 'AllOk'
 } else {
-    $verdict    = 'Mixed results, see details above'
+    $verdict = 'Mixed results, see details above'
     $verdictKey = 'Mixed'
 }
 
-# Build the 'What to try' steps based on the verdict.
-# Keep steps generic (no ISP-specific toggle paths), in "try first, try next, last resort" order.
 switch ($verdictKey) {
-    'IspBlock' {
-        $steps += 'Your ISP is on the known-culprit list and gateway ports are failing. The fix is almost always an ISP-provided security feature that is on by default.'
-        $steps += 'Open your ISP''s account app or website and look for a setting called "Security Shield", "Advanced Security", "Network Protection", or similar. Turn it off.'
-        $steps += 'Restart your router, then re-run this script. UDP/3478 should now show OK.'
-        $steps += 'If the ISP toggle does not exist or does not help, try a VPN that forwards UDP (Mullvad, AirVPN, PIA) to confirm the block is on the ISP side.'
-        $steps += 'Still stuck? Run the full Captain''s Chest toolkit for ISP-specific toggle paths: https://github.com/1r0nch3f/Windrose-Captain-Chest'
+    'GeneralConnectivity' {
+        $steps += 'DNS and TCP checks are failing together. Prioritize restoring basic internet connectivity first.'
+        $steps += 'Reboot modem/router and PC, then re-run this script.'
+        $steps += 'Try a different DNS resolver (1.1.1.1 or 8.8.8.8), then run: ipconfig /flushdns.'
+        $steps += 'Test from another network (mobile hotspot) to isolate local network vs ISP path issues.'
     }
-    'UdpBlock' {
-        $steps += 'TCP works but UDP to the gateway is failing. This is the classic Windrose-blocking pattern.'
-        $steps += 'First, check your ISP''s account app or website for a "Security Shield" / "Advanced Security" / "Network Protection" feature. Turn it off.'
-        $steps += 'Next, check your router admin page for firewall or parental-control features. Some routers block UDP traffic on non-standard ports by default.'
-        $steps += 'Then check any third-party antivirus or firewall on your PC (Norton, McAfee, Kaspersky, ESET). Disable temporarily to test.'
-        $steps += 'If none of the above works, a VPN that forwards UDP (Mullvad, AirVPN, PIA) will bypass the block entirely.'
+    'TcpFailure' {
+        $steps += 'TCP gateway checks are failing, so troubleshoot general outbound connectivity before focusing on UDP/STUN.'
+        $steps += 'Temporarily disable third-party firewall/antivirus and test again.'
+        $steps += 'Review router firewall/parental-control rules for this device.'
+        $steps += 'If possible, compare results on a different network to isolate the failure domain.'
     }
-    'LocalFirewall' {
-        $steps += 'DNS resolves but TCP connects are failing. Something between your PC and the wider internet is blocking outbound traffic.'
-        $steps += 'Temporarily disable any third-party antivirus or firewall on your PC (Norton, McAfee, Kaspersky, ESET, Malwarebytes). Re-run.'
-        $steps += 'Check Windows Defender Firewall allows outbound on 443/tcp. Press Win, type "Windows Defender Firewall", check Advanced settings > Outbound Rules.'
-        $steps += 'Check your router for any outbound blocking or parental-control rules targeting your device.'
-        $steps += 'Try from a different network (mobile hotspot is a quick test) to confirm whether it is your machine or your network.'
+    'BroadUdpFailure' {
+        $steps += 'TCP checks passed, but public STUN servers did not reply. This pattern suggests broader UDP/path filtering.'
+        $steps += 'Check ISP app/portal for security features (Security Shield / Advanced Security / Network Protection) and disable for testing.'
+        $steps += 'Check router firewall, parental controls, VPN policy, and endpoint security software for UDP filtering.'
+        $steps += 'A known-good VPN can help confirm whether the block is on the local/ISP path.'
     }
-    'DnsIssue' {
-        $steps += 'DNS lookups are failing, which means your machine cannot translate the Windrose hostnames into IP addresses.'
-        $steps += 'Switch your DNS to a public resolver: 1.1.1.1 (Cloudflare) or 8.8.8.8 (Google). Network settings > change adapter options > right-click your adapter > Properties > IPv4 > Use the following DNS servers.'
-        $steps += 'After changing DNS, flush the local DNS cache: open an admin PowerShell and run ipconfig /flushdns.'
-        $steps += 'Re-run this script. DNS entries should now show OK.'
-        $steps += 'If DNS still fails after switching, your ISP may be blocking windrose.support at the DNS level, and a VPN will likely be needed.'
+    'WindroseEndpointNoReply' {
+        $steps += 'Public STUN replies were observed, so general UDP/STUN path appears functional.'
+        $steps += 'The tested Windrose UDP endpoint did not respond to this generic probe. This alone is NOT proof of ISP/router UDP blocking.'
+        $steps += 'Re-test later and compare with the full Captain''s Chest toolkit for additional Windrose-specific checks.'
+        $steps += 'If gameplay still fails, share this log with support so they can correlate with service-side telemetry.'
     }
     'IspOkButCulprit' {
-        $steps += 'All checks passed, so your connection to Windrose is working right now. But your ISP is on the known-culprit list for blocking this game.'
-        $steps += 'If the game breaks again later (especially after a router reboot or ISP app update), the ISP security toggle may have re-enabled itself. Check it again if that happens.'
-        $steps += 'If the game is currently misbehaving, the cause is likely server-side (Windrose capacity) or client-side (crash, missing runtimes, driver).'
-        $steps += 'For client-side issues, run the full Captain''s Chest toolkit: https://github.com/1r0nch3f/Windrose-Captain-Chest'
+        $steps += 'Current quick checks passed, but your ISP has known history with game-impacting filtering.'
+        $steps += 'If issues recur later, verify ISP security features are still disabled.'
+        $steps += 'If connection failures continue, run the full Captain''s Chest toolkit for deeper diagnostics.'
     }
     'AllOk' {
-        $steps += 'All network checks passed. Your connection to Windrose is working.'
-        $steps += 'If the game still will not connect, the cause is on Windrose''s side (server capacity during peak hours) or on your machine (crash, missing runtimes, driver, corrupted install).'
-        $steps += 'For peak-hour issues, try again later, or host with Direct IP mode (port 7777) to bypass the backend entirely.'
-        $steps += 'For client-side issues, run the full Captain''s Chest toolkit: https://github.com/1r0nch3f/Windrose-Captain-Chest'
+        $steps += 'Quick triage did not detect broad DNS/TCP/UDP path failure.'
+        $steps += 'If gameplay still fails, the issue may be endpoint-specific, temporary backend load, or client-side configuration.'
+        $steps += 'Run the full Captain''s Chest toolkit and include both logs when requesting support.'
     }
-    'Mixed' {
-        $steps += 'Some checks failed in ways that do not match a single known pattern. The combined signal is unclear.'
-        $steps += 'Run the full Captain''s Chest toolkit for deeper diagnostics: https://github.com/1r0nch3f/Windrose-Captain-Chest'
-        $steps += 'When asking for help, paste both this log and the Captain''s Chest output so helpers can see the full picture.'
+    default {
+        $steps += 'Signals are mixed. Re-run the test and gather the full Captain''s Chest output for support.'
     }
 }
 
 Write-Line ''
-$vcolor = if ($verdictKey -eq 'AllOk') { 'Good' } elseif ($verdictKey -in @('IspOkButCulprit','IspBlock','UdpBlock','LocalFirewall','DnsIssue')) { 'Warn' } else { 'Bad' }
+$vcolor = if ($verdictKey -in @('AllOk','IspOkButCulprit')) { 'Good' } elseif ($verdictKey -in @('WindroseEndpointNoReply','BroadUdpFailure','TcpFailure','GeneralConnectivity')) { 'Warn' } else { 'Bad' }
 Write-Line "  $verdict" $vcolor
 Write-Line ''
 
 Write-Line "========================================================" 'Head'
-Write-Line "  What to try"                                             'Head'
+Write-Line "  What to try" 'Head'
 Write-Line "========================================================" 'Head'
 Write-Line ''
 $stepNum = 1
@@ -445,7 +496,7 @@ foreach ($s in $steps) {
 }
 
 Write-Line "========================================================" 'Head'
-Write-Line "  Next steps"                                              'Head'
+Write-Line "  Next steps" 'Head'
 Write-Line "========================================================" 'Head'
 Write-Line "  Full toolkit   : https://github.com/1r0nch3f/Windrose-Captain-Chest" 'Dim'
 Write-Line "  Troubleshooting: https://github.com/1r0nch3f/Windrose-Troubleshooting" 'Dim'
@@ -454,8 +505,8 @@ Write-Line ''
 # --- Save log ---------------------------------------------------------------
 
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$desktop   = [Environment]::GetFolderPath('Desktop')
-$logPath   = Join-Path $desktop "Windrose-Triage-$timestamp.log"
+$desktop = [Environment]::GetFolderPath('Desktop')
+$logPath = Join-Path $desktop "Windrose-Triage-$timestamp.log"
 
 try {
     $script:LogLines | Out-File -FilePath $logPath -Encoding utf8 -Force
