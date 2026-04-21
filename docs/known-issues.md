@@ -35,6 +35,18 @@ Reproducible bugs and their workarounds. Updated as the game gets patched.
 
 **Details**: [BL disconnect errors](errors/bl-disconnect.md)
 
+### Tutorial gate blocks multiplayer silently
+
+Players who have not finished the single-player tutorial cannot connect to multiplayer. The game drops them back to the main menu with no error. See [Tutorial not completed](scenarios/tutorial-not-completed.md).
+
+### Steam Cloud leaves duplicate MANIFEST files in the RocksDB save folder
+
+Syncing saves between machines can produce two MANIFEST files, causing an infinite loading screen after the Unreal splash. See [Steam Cloud save corruption (RocksDB)](errors/save-corruption-rocksdb.md).
+
+### Windows prefers IPv6 for Windrose DNS lookups
+
+The Windrose backend is IPv4 only. On systems where Windows resolves DNS with IPv6 preference, connections fail silently. See [IPv4 priority](guides/ipv4-priority.md).
+
 ## Placeholder entries (add details as we confirm them)
 
 ### Steam Deck unverified status

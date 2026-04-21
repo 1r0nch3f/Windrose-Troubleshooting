@@ -15,6 +15,8 @@ Pick the statement that best matches your situation:
 | I can't join any server, but others can | [I can't join anywhere](docs/scenarios/cant-join-anywhere.md) |
 | My dedicated server crashes when someone tries to join | [Dedicated server crashes on join](docs/scenarios/dedicated-server-crash.md) |
 | Connection works, then drops after a while | [Connection drops mid-session](docs/scenarios/connection-drops.md) |
+| I get an infinite loading screen after the Unreal logo | [Steam Cloud save corruption (RocksDB)](docs/errors/save-corruption-rocksdb.md) |
+| I can't connect to multiplayer and I may not have finished the tutorial | [Tutorial not completed](docs/scenarios/tutorial-not-completed.md) |
 | I see a specific error message | [Error signature catalog](docs/errors/README.md) |
 | I want an automated quick check of my connection | [Run Quick-Triage](scripts/) |
 | Not sure | [Full diagnostic flowchart](docs/diagnostic-flowchart.md) |
@@ -29,9 +31,12 @@ The single most useful thing you can attach is your log file. The [log gathering
 
 - [`docs/diagnostic-flowchart.md`](docs/diagnostic-flowchart.md), decision tree for narrowing down the issue
 - [`docs/scenarios/`](docs/scenarios/), walk-throughs grouped by symptom
+  - [`tutorial-not-completed.md`](docs/scenarios/tutorial-not-completed.md), tutorial gate: why players are silently dropped before multiplayer even starts
 - [`docs/errors/`](docs/errors/), catalog of known error messages and what they mean
+  - [`save-corruption-rocksdb.md`](docs/errors/save-corruption-rocksdb.md), Steam Cloud duplicate MANIFEST causing infinite loading screen
 - [`docs/environments/`](docs/environments/), setup-specific notes (Windows, Linux client via Proton, Linux server via Wine, Docker, etc.)
-- [`docs/guides/`](docs/guides/), cross-cutting how-tos (log gathering, port forwarding, CGNAT checks)
+- [`docs/guides/`](docs/guides/), cross-cutting how-tos (log gathering, port forwarding, CGNAT checks, IPv4 priority)
+  - [`ipv4-priority.md`](docs/guides/ipv4-priority.md), demoting IPv6 below IPv4 for the IPv4-only Windrose backend
 - [`docs/known-issues.md`](docs/known-issues.md), living list of reproducible bugs and workarounds
 - [`docs/support-request-template.md`](docs/support-request-template.md), what to include when asking for help
 - [`docs/glossary.md`](docs/glossary.md), networking and game-specific terms
