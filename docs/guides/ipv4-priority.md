@@ -43,7 +43,7 @@ After rebooting, run both checks below.
 netsh interface ipv6 show prefixpolicies
 ```
 
-IPv4-mapped prefixes (`::ffff:0:0/96` and `::ffff:0:0/96`) should have a higher precedence value than the native IPv6 prefixes.
+The IPv4-mapped prefix `::ffff:0:0/96` should have a higher precedence value than the native IPv6 prefixes.
 
 **Check DNS resolution order:**
 
