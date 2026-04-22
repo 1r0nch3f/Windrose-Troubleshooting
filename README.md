@@ -17,6 +17,7 @@ Pick the statement that best matches your situation:
 | Connection works, then drops after a while | [Connection drops mid-session](docs/scenarios/connection-drops.md) |
 | I get an infinite loading screen after the Unreal logo | [Steam Cloud save corruption (RocksDB)](docs/errors/save-corruption-rocksdb.md) |
 | I can't connect to multiplayer and I may not have finished the tutorial | [Tutorial not completed](docs/scenarios/tutorial-not-completed.md) |
+| I rent a server through GPortal or Nitrado and can't connect or lost my world | [Hosted server issues (GPortal / Nitrado)](docs/scenarios/hosted-server-issues.md) |
 | I see a specific error message | [Error signature catalog](docs/errors/README.md) |
 | I want an automated quick check of my connection | [Run Quick-Triage](scripts/) |
 | Not sure | [Full diagnostic flowchart](docs/diagnostic-flowchart.md) |
@@ -32,6 +33,7 @@ The single most useful thing you can attach is your log file. The [log gathering
 - [`docs/diagnostic-flowchart.md`](docs/diagnostic-flowchart.md), decision tree for narrowing down the issue
 - [`docs/scenarios/`](docs/scenarios/), walk-throughs grouped by symptom
   - [`tutorial-not-completed.md`](docs/scenarios/tutorial-not-completed.md), tutorial gate: why players are silently dropped before multiplayer even starts
+  - [`hosted-server-issues.md`](docs/scenarios/hosted-server-issues.md), GPortal and Nitrado: can't connect, blank world, and save restore
 - [`docs/errors/`](docs/errors/), catalog of known error messages and what they mean
   - [`save-corruption-rocksdb.md`](docs/errors/save-corruption-rocksdb.md), Steam Cloud duplicate MANIFEST causing infinite loading screen
 - [`docs/environments/`](docs/environments/), setup-specific notes (Windows, Linux client via Proton, Linux server via Wine, Docker, etc.)

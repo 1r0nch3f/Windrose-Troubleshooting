@@ -241,6 +241,165 @@ Write-Line "  $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"                'Dim'
 Write-Line "========================================================" 'Head'
 Write-Line ''
 
+# --- Hosting mode gate ------------------------------------------------------
+# Ask up front whether this is a third-party hosted server issue.
+# If so, skip all network checks (they are irrelevant) and route directly
+# to the provider-specific verdict.
+
+Write-Line "========================================================" 'Head'
+Write-Line "  How are you connecting to Windrose?"                    'Head'
+Write-Line "========================================================" 'Head'
+Write-Line ''
+Write-Line "  1. Playing normally (no dedicated server)" 'Info'
+Write-Line "  2. Connecting to a GPortal-hosted server"  'Info'
+Write-Line "  3. Connecting to a Nitrado-hosted server"  'Info'
+Write-Line ''
+
+$hostingChoice = Read-Host "  Enter 1, 2, or 3"
+
+$thirdPartyProvider = $null
+$thirdPartyIssue    = $null
+
+if ($hostingChoice -in @('2','3')) {
+    $thirdPartyProvider = if ($hostingChoice -eq '2') { 'GPortal' } else { 'Nitrado' }
+
+    Write-Line ''
+    Write-Line "  What is the problem with your $thirdPartyProvider server?" 'Head'
+    Write-Line ''
+    Write-Line "  1. I cannot connect to the server (it won't let me in)" 'Info'
+    Write-Line "  2. My world is blank or missing"                         'Info'
+    Write-Line ''
+
+    $issueChoice = Read-Host "  Enter 1 or 2"
+
+    if ($issueChoice -eq '2') {
+        Write-Line ''
+        Write-Line "  Do you have a backup of the world?" 'Head'
+        Write-Line ''
+        Write-Line "  1. Yes, I have a backup"  'Info'
+        Write-Line "  2. No, I have no backup"  'Info'
+        Write-Line ''
+        $backupChoice = Read-Host "  Enter 1 or 2"
+        $thirdPartyIssue = if ($backupChoice -eq '1') { 'WorldWithBackup' } else { 'WorldNoBackup' }
+    } else {
+        $thirdPartyIssue = 'CannotConnect'
+    }
+}
+
+if ($thirdPartyProvider) {
+    # Skip all network checks and jump straight to the provider verdict.
+    Write-Line ''
+    Write-Line "  Skipping network checks (not relevant for hosted server issues)." 'Dim'
+    Write-Line ''
+
+    Write-Line "========================================================" 'Head'
+    Write-Line "  Verdict"                                                 'Head'
+    Write-Line "========================================================" 'Head'
+    Write-Line ''
+
+    switch ($thirdPartyIssue) {
+        'CannotConnect' {
+            Write-Line "  $thirdPartyProvider hosted server - cannot connect" 'Warn'
+            Write-Line ''
+            Write-Line "========================================================" 'Head'
+            Write-Line "  What to try"                                             'Head'
+            Write-Line "========================================================" 'Head'
+            Write-Line ''
+            Write-Line "  1. Log into your $thirdPartyProvider dashboard and confirm the server status shows Online/Running. If it shows Stopped or Starting, wait 2-3 minutes and try again." 'Info'
+            Write-Line ''
+            Write-Line "  2. Check that you are using the correct server IP and port shown in your $thirdPartyProvider dashboard. Copy it directly rather than typing it manually." 'Info'
+            Write-Line ''
+            Write-Line "  3. Confirm the server region matches the one you selected when renting. Connecting from a region far from the server location can cause timeouts." 'Info'
+            Write-Line ''
+            Write-Line "  4. Try connecting via Direct IP in-game (Play > Connect to Server > enter the IP and port from your dashboard). This bypasses Windrose connectivity services entirely." 'Info'
+            Write-Line ''
+            Write-Line "  5. Check your local firewall and antivirus are not blocking the game. Temporarily disable them to test, then re-enable after." 'Info'
+            Write-Line ''
+            Write-Line "  6. If none of the above helps, open a support ticket with $thirdPartyProvider directly. They can see server logs and confirm whether the issue is on their infrastructure." 'Info'
+            Write-Line "     GPortal support : https://www.g-portal.com/en/support" 'Dim'
+            Write-Line "     Nitrado support  : https://server.nitrado.net/en-US/support" 'Dim'
+            Write-Line ''
+        }
+        'WorldWithBackup' {
+            Write-Line "  $thirdPartyProvider hosted server - world blank or missing (backup available)" 'Warn'
+            Write-Line ''
+            Write-Line "========================================================" 'Head'
+            Write-Line "  What to try"                                             'Head'
+            Write-Line "========================================================" 'Head'
+            Write-Line ''
+            Write-Line "  1. Stop the server in your $thirdPartyProvider dashboard before touching any files. Never edit save files while the server is running." 'Info'
+            Write-Line ''
+            Write-Line "  2. Download your backup files from $thirdPartyProvider using an FTP client. Use Cyberduck (free, Microsoft Store) instead of FileZilla - FileZilla is known to corrupt Windrose save files during transfer." 'Info'
+            Write-Line ''
+            Write-Line "  3. On the server, navigate to: \R5\Saved\SaveProfiles\Default_Backups\" 'Info'
+            Write-Line "     Find the backup folder named by the date and time you want to restore." 'Info'
+            Write-Line ''
+            Write-Line "  4. Copy the contents of that backup folder (the subfolder and AccountDescription.json) into the active save location:" 'Info'
+            Write-Line "     \R5\Saved\SaveProfiles\Default\RocksDB\" 'Info'
+            Write-Line "     Replace files when prompted." 'Info'
+            Write-Line ''
+            Write-Line "  5. Start the server again and test. If the world still appears blank, try an older backup from the same folder. Backups are kept for up to 30 launches." 'Info'
+            Write-Line ''
+            Write-Line "  6. If restoring from backup fails, contact $thirdPartyProvider support. They may have server-side snapshots." 'Info'
+            Write-Line "     GPortal support : https://www.g-portal.com/en/support" 'Dim'
+            Write-Line "     Nitrado support  : https://server.nitrado.net/en-US/support" 'Dim'
+            Write-Line ''
+        }
+        'WorldNoBackup' {
+            Write-Line "  $thirdPartyProvider hosted server - world blank or missing (no backup)" 'Bad'
+            Write-Line ''
+            Write-Line "========================================================" 'Head'
+            Write-Line "  What to try"                                             'Head'
+            Write-Line "========================================================" 'Head'
+            Write-Line ''
+            Write-Line "  1. Stop the server in your $thirdPartyProvider dashboard immediately. Do not restart it or launch a new world yet - this may overwrite any remaining data." 'Info'
+            Write-Line ''
+            Write-Line "  2. Check for automatic backups you may not know about. On the server navigate to:" 'Info'
+            Write-Line "     \R5\Saved\SaveProfiles\Default_Backups\" 'Info'
+            Write-Line "     Windrose creates a backup on every server launch (up to 30 kept). There may be one there even if you did not make one manually." 'Info'
+            Write-Line ''
+            Write-Line "  3. If the Backups folder is empty or missing, contact $thirdPartyProvider support immediately. Do not make any changes to the server." 'Info'
+            Write-Line "     Explain the situation and ask whether they have any server-side snapshots or infrastructure-level backups before the data was lost." 'Info'
+            Write-Line "     GPortal support : https://www.g-portal.com/en/support" 'Dim'
+            Write-Line "     Nitrado support  : https://server.nitrado.net/en-US/support" 'Dim'
+            Write-Line ''
+            Write-Line "  4. If no backup exists anywhere, the world data is likely unrecoverable. You can start a fresh world on the same server from the $thirdPartyProvider dashboard." 'Info'
+            Write-Line ''
+            Write-Line "  Going forward: Windrose auto-backs up on every server launch (up to 30 files). Periodically download copies from \R5\Saved\SaveProfiles\Default_Backups\ using Cyberduck to keep an off-server copy safe." 'Warn'
+            Write-Line ''
+        }
+    }
+
+    # Shared next-steps footer for all third-party paths
+    Write-Line "========================================================" 'Head'
+    Write-Line "  Next steps"                                              'Head'
+    Write-Line "========================================================" 'Head'
+    Write-Line "  Full toolkit   : https://github.com/1r0nch3f/Windrose-Captain-Chest"      'Dim'
+    Write-Line "  Troubleshooting: https://github.com/1r0nch3f/Windrose-Troubleshooting"    'Dim'
+    Write-Line ''
+
+    # Save log and optional clipboard, then exit early
+    $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $desktop   = [Environment]::GetFolderPath('Desktop')
+    $logPath   = Join-Path $desktop "Windrose-Triage-$timestamp.log"
+    try {
+        $script:LogLines | Out-File -FilePath $logPath -Encoding utf8 -Force
+        Write-Line "  Log saved: $logPath" 'Good'
+    } catch {
+        Write-Line "  Could not save log: $($_.Exception.Message)" 'Bad'
+    }
+    if ($Clipboard) {
+        try {
+            $script:LogLines -join "`r`n" | Set-Clipboard
+            Write-Line "  Log copied to clipboard (paste it in Discord)." 'Good'
+        } catch {
+            Write-Line "  Log could not be copied to clipboard: $($_.Exception.Message)" 'Warn'
+        }
+    }
+    Write-Line ''
+    exit 0
+}
+
 # --- 1. Public IP and ISP ---------------------------------------------------
 
 Write-Line "[1/5] Detecting public IP and ISP..." 'Head'
