@@ -414,9 +414,11 @@ switch ($verdictKey) {
         $steps += 'If the game breaks again later (especially after a router reboot or ISP app update), the ISP security toggle may have re-enabled itself. Check it again if that happens.'
         $steps += 'If the game is currently misbehaving, the cause is likely server-side (Windrose capacity) or client-side (crash, missing runtimes, driver).'
         $steps += 'For client-side issues, run the full Captain''s Chest toolkit: https://github.com/1r0nch3f/Windrose-Captain-Chest'
+        $steps += 'Check tutorial completion: every player must finish the single-player tutorial on their own Steam account before they can join multiplayer. This is the most common cause of silent "dropped back to main menu" reports. Details: https://github.com/1r0nch3f/Windrose-Troubleshooting/blob/main/docs/scenarios/tutorial-not-completed.md'
     }
     'AllOk' {
         $steps += 'All network checks passed. Your connection to Windrose is working.'
+        $steps += 'Check tutorial completion: every player must finish the single-player tutorial on their own Steam account before they can join multiplayer. This is the most common cause of silent "dropped back to main menu" reports. Details: https://github.com/1r0nch3f/Windrose-Troubleshooting/blob/main/docs/scenarios/tutorial-not-completed.md'
         $steps += 'If the game still will not connect, the cause is on Windrose''s side (server capacity during peak hours) or on your machine (crash, missing runtimes, driver, corrupted install).'
         $steps += 'For peak-hour issues, try again later, or host with Direct IP mode (port 7777) to bypass the backend entirely.'
         $steps += 'For client-side issues, run the full Captain''s Chest toolkit: https://github.com/1r0nch3f/Windrose-Captain-Chest'
@@ -425,6 +427,7 @@ switch ($verdictKey) {
         $steps += 'Some checks failed in ways that do not match a single known pattern. The combined signal is unclear.'
         $steps += 'Run the full Captain''s Chest toolkit for deeper diagnostics: https://github.com/1r0nch3f/Windrose-Captain-Chest'
         $steps += 'When asking for help, paste both this log and the Captain''s Chest output so helpers can see the full picture.'
+        $steps += 'Check tutorial completion: every player must finish the single-player tutorial on their own Steam account before they can join multiplayer. This is the most common cause of silent "dropped back to main menu" reports. Details: https://github.com/1r0nch3f/Windrose-Troubleshooting/blob/main/docs/scenarios/tutorial-not-completed.md'
     }
 }
 
