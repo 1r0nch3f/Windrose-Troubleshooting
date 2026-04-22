@@ -31,7 +31,7 @@ $ProgressPreference    = 'SilentlyContinue'
 
 # --- Config -----------------------------------------------------------------
 
-$Version = '1.0.0'
+$Version = '1.1.0'
 
 # ISPs known to cause partial-outage symptoms with Windrose (router security
 # features blocking UDP/3478, etc.). Patterns are regex alternations matched
